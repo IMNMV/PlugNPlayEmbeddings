@@ -11,7 +11,7 @@ This application provides semantic search and clustering analysis for text docum
 ## Setup Instructions
 
 1. Install Ollama:
-   - Visit https://ollama.ai](https://ollama.com
+   - Visit [https://ollama.ai](https://ollama.com](https://ollama.com)
    - Follow installation instructions for your OS
 
 2. Pull the Nomic embeddings model using the command line interface:
