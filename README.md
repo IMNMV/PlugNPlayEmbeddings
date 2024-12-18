@@ -19,9 +19,9 @@ Text Analysis with Embeddings - This application provides semantic search and cl
 
    # Confirm it worked correctly
    curl http://localhost:11434/api/embeddings -d '{
-  "model": "nomic-embed-text",
-  "prompt": "test"
-}'
+    "model": "nomic-embed-text",
+    "prompt": "test"
+    }'
    ```
   
 
