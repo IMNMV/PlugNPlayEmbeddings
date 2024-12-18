@@ -36,7 +36,7 @@ class PaperAnalyzer:
         # Return averaged embedding
         return np.mean(chunk_embeddings, axis=0)
         
-    def parse_document(self, uploaded_file):
+    def parse_document(self, uploaded_file, chunk_size=None):
         """Parse any text document into chunks with metadata"""
         content = uploaded_file.getvalue().decode('utf-8')
         
@@ -44,12 +44,17 @@ class PaperAnalyzer:
         filename = uploaded_file.name
         file_type = filename.split('.')[-1]
         
-        # Initialize parsing settings - nomic-embed-text has 8192 token context window
-        # Conservative estimate: assume average token is 1.5 words. This may need adjusting
+        # Initialize parsing settings
         MAX_TOKENS = 8192
         WORDS_PER_TOKEN = 1.5
-        MAX_WORDS = int(MAX_TOKENS / WORDS_PER_TOKEN)  # ~5461 words
-        CHUNK_SIZE = int(MAX_WORDS * 0.8)  # 80% of max to be safe
+        MAX_WORDS = int(MAX_TOKENS / WORDS_PER_TOKEN)
+        
+        # Use provided chunk size or default
+        if chunk_size:
+            CHUNK_SIZE = min(chunk_size, MAX_WORDS)  # Ensure we don't exceed max
+        else:
+            CHUNK_SIZE = int(MAX_WORDS * 0.8)  # 80% of max to be safe
+            
         OVERLAP = int(CHUNK_SIZE * 0.1)  # 10% overlap between chunks
 
         # Split content into words
@@ -89,7 +94,44 @@ class PaperAnalyzer:
             })
         
         return parsed_chunks
-
+    
+    def extract_topics(self, documents, n_topics=5):
+        """Extract topics from document chunks using embeddings"""
+        from sklearn.decomposition import PCA
+        
+        # Get embeddings for all chunks
+        embeddings = []
+        for doc in documents:
+            emb = self.chunk_and_embed(doc['content'])
+            embeddings.append(emb)
+        
+        embeddings_array = np.array(embeddings)
+        
+        # Apply PCA to embeddings
+        pca = PCA(n_components=n_topics, random_state=42)
+        topic_embeddings = pca.fit_transform(embeddings_array)
+        
+        # Get top chunks for each topic
+        topics = []
+        for topic_idx in range(n_topics):
+            # Get normalized topic scores (convert to 0-1 range)
+            topic_scores = topic_embeddings[:, topic_idx]
+            topic_scores = (topic_scores - topic_scores.min()) / (topic_scores.max() - topic_scores.min())
+            
+            # Get top chunks
+            top_chunks_idx = topic_scores.argsort()[-5:][::-1]  # Get top 5 chunks
+            topics.append({
+                'id': topic_idx,
+                'chunks': [documents[idx]['content'][:200] + "..." for idx in top_chunks_idx],
+                'chunk_ids': [documents[idx]['source'] for idx in top_chunks_idx],
+                'strengths': topic_scores[top_chunks_idx]
+            })
+        
+        # Normalize topic distribution matrix
+        topic_dist = (topic_embeddings - topic_embeddings.min()) / (topic_embeddings.max() - topic_embeddings.min())
+        
+        return topics, topic_dist
+    
     def get_embedding(self, text, task_type='search_document'):
         """Get embedding with task-specific prefix"""
         try:
@@ -134,13 +176,13 @@ class PaperAnalyzer:
                     'similarity': similarity,
                     'content': paper['content'],
                     'metadata': paper.get('metadata', {}),
-                    'cosine': similarity
+                    'cosine': similarity  
                 })
         
         return sorted(related_papers, key=lambda x: x['similarity'], reverse=True)
         
-    def cluster_papers(self, papers, n_clusters=5, validate=True):
-        """Cluster papers using averaged embeddings with validation metrics"""
+    def cluster_papers(self, papers, n_clusters=5):
+        """Cluster papers using averaged embeddings"""
         embeddings = []
         for paper in papers:
             paper_embedding = self.chunk_and_embed(paper['content'])
@@ -149,46 +191,121 @@ class PaperAnalyzer:
         # Convert to numpy array
         embeddings_array = np.array(embeddings)
         
-        # If validate, calculate elbow curve first
-        if validate:
-            inertias = []
-            silhouette_scores = []
-            # Ensure k_range is valid for silhouette score (2 to n_samples-1)
-            k_range = range(2, min(len(papers)-1, 10) + 1)  
-            
-            # Only proceed if we have enough samples for at least 2 clusters
-            if len(papers) > 2:
-                for k in k_range:
-                    kmeans = KMeans(n_clusters=k)
-                    labels = kmeans.fit_predict(embeddings_array)
-                    inertias.append(kmeans.inertia_)
-                    try:
-                        score = silhouette_score(embeddings_array, labels)
-                        silhouette_scores.append(score)
-                    except ValueError:
-                        silhouette_scores.append(0)
-            else:
-                st.warning("Not enough documents for meaningful clustering validation")
-                return kmeans.fit_predict(embeddings_array), embeddings_array, 0
-                    
-            # Store validation metrics
-            self.clustering_metrics = {
-                'k_range': list(k_range),
-                'inertias': inertias,
-                'silhouette_scores': silhouette_scores
-            }
-        
-        # Perform final clustering with specified n_clusters
+        # Perform clustering
         kmeans = KMeans(n_clusters=n_clusters)
         clusters = kmeans.fit_predict(embeddings_array)
-        
-        # Calculate silhouette score for final clustering
-        if len(set(clusters)) > 1:
-            final_silhouette = silhouette_score(embeddings_array, clusters)
-        else:
-            final_silhouette = 0
             
-        return clusters, embeddings_array, final_silhouette
+        return clusters, embeddings_array
+            
+        
+
+    def compare_documents(self, doc1_chunks, doc2_chunks):
+        """Compare two documents by analyzing their chunks in embedding space"""
+        # Get embeddings for all chunks from both documents
+        doc1_embeddings = []
+        doc2_embeddings = []
+        
+        # Get embeddings for all chunks
+        for chunk in doc1_chunks:
+            emb = self.chunk_and_embed(chunk['content'])
+            doc1_embeddings.append(emb)
+        
+        for chunk in doc2_chunks:
+            emb = self.chunk_and_embed(chunk['content'])
+            doc2_embeddings.append(emb)
+        
+        # Combine embeddings for TSNE
+        all_embeddings = np.vstack([doc1_embeddings, doc2_embeddings])
+        
+        # Calculate appropriate perplexity (should be smaller than n_samples)
+        n_samples = len(doc1_chunks) + len(doc2_chunks)
+        perplexity = min(30, n_samples - 1)  # Default is 30, but must be < n_samples
+        
+        # Create TSNE visualization with adjusted perplexity
+        tsne = TSNE(n_components=2, random_state=42, perplexity=perplexity)
+        embeddings_2d = tsne.fit_transform(all_embeddings)
+        
+        # Split back into document groups
+        doc1_coords = embeddings_2d[:len(doc1_embeddings)]
+        doc2_coords = embeddings_2d[len(doc1_embeddings):]
+        
+        # Calculate cross-document similarities
+        similarities = np.zeros((len(doc1_chunks), len(doc2_chunks)))
+        for i, emb1 in enumerate(doc1_embeddings):
+            for j, emb2 in enumerate(doc2_embeddings):
+                similarities[i,j] = self.calculate_similarity(emb1, emb2)
+        
+        # Create visualization data
+        viz_data = {
+            'tsne_coords': embeddings_2d,
+            'doc1_coords': doc1_coords,
+            'doc2_coords': doc2_coords,
+            'cross_similarities': similarities,
+            'metadata': {
+                'doc1_chunks': len(doc1_chunks),
+                'doc2_chunks': len(doc2_chunks),
+                'perplexity_used': perplexity
+            }
+        }
+        
+        return viz_data
+    
+    def visualize_comparison(self, viz_data, doc1_chunks, doc2_chunks):
+        """Create visualizations for document comparison"""
+        # TSNE scatter plot
+        fig_scatter = go.Figure()
+        
+        # Add points for document 1
+        doc1_coords = viz_data['doc1_coords']
+        doc1_hover_text = [f"Doc1 Chunk {i+1}<br>{chunk['content'][:100]}..." 
+                        for i, chunk in enumerate(doc1_chunks)]
+        fig_scatter.add_trace(go.Scatter(
+            x=doc1_coords[:, 0],
+            y=doc1_coords[:, 1],
+            mode='markers+text',
+            name='Document 1',
+            text=[f"D1-{i+1}" for i in range(len(doc1_coords))],
+            textposition="top center",
+            hovertext=doc1_hover_text,
+            hoverinfo='text',
+            marker=dict(size=10, color='blue', opacity=0.6)
+        ))
+        
+        # Add points for document 2
+        doc2_coords = viz_data['doc2_coords']
+        doc2_hover_text = [f"Doc2 Chunk {i+1}<br>{chunk['content'][:100]}..." 
+                        for i, chunk in enumerate(doc2_chunks)]
+        fig_scatter.add_trace(go.Scatter(
+            x=doc2_coords[:, 0],
+            y=doc2_coords[:, 1],
+            mode='markers+text',
+            name='Document 2',
+            text=[f"D2-{i+1}" for i in range(len(doc2_coords))],
+            textposition="top center",
+            hovertext=doc2_hover_text,
+            hoverinfo='text',
+            marker=dict(size=10, color='red', opacity=0.6)
+        ))
+        
+        fig_scatter.update_layout(
+            title=f"Document Chunks in Embedding Space (perplexity={viz_data['metadata']['perplexity_used']})",
+            xaxis_title="TSNE Dimension 1",
+            yaxis_title="TSNE Dimension 2",
+            showlegend=True,
+            hovermode='closest'
+        )
+        
+        # Create cross-similarity heatmap
+        fig_heatmap = px.imshow(
+            viz_data['cross_similarities'],
+            labels=dict(x="Document 2 Chunks", y="Document 1 Chunks", color="Similarity"),
+            color_continuous_scale="RdBu",
+            aspect="auto"
+        )
+        fig_heatmap.update_layout(title="Cross-document Chunk Similarities")
+        
+        return fig_scatter, fig_heatmap
+
 
     def create_similarity_network(self, papers, similarity_threshold=0.7):
         """Create network using averaged embeddings"""
@@ -285,121 +402,236 @@ class PaperAnalyzer:
 
 def main():
     st.title("Textual Analysis")
-    
     analyzer = PaperAnalyzer()
-    uploaded_file = st.file_uploader("Upload text document", type=["txt", "md", "csv", "json"])
     
-    if uploaded_file is not None:
-        documents = analyzer.parse_document(uploaded_file)
+    # Global settings in sidebar
+    st.sidebar.header("Analysis Settings")
+    chunk_size = st.sidebar.slider(
+        "Chunk Size (words)", 
+        min_value=100,
+        max_value=5000,
+        value=4000,
+        step=100
+    )
+    
+    n_topics = st.sidebar.slider(
+        "Number of Topics",
+        min_value=2,
+        max_value=10,
+        value=5
+    )
+    
+    # Choose analysis type
+    analysis_type = st.radio("Select Analysis Type:", 
+                            ["Single Document Analysis", "Document Comparison"])
+    
+    if analysis_type == "Single Document Analysis":
+        uploaded_file = st.file_uploader("Upload document", type=["txt", "md", "csv", "json"], key="single_doc")
         
-        # Search functionality
-        st.subheader("Semantic Search")
-        query = st.text_input("Enter research question or topic:")
-        search_threshold = st.slider("Search Similarity Threshold", 0.0, 1.0, 0.3)
-        
-        if query:
-            with st.spinner("Searching papers..."):
-                matches = analyzer.analyze_query(query, documents, search_threshold)
-
-                if matches:
-                    st.write("### Matching Documents")
-                    for match in matches:
-                        with st.expander(f"{match['source']} (Cosine Similarity: {match['cosine']:.3f})"):
-                            st.write(f"**Similarity Score:** {match['similarity']:.3f}")
-                            
-                            # Add buttons to toggle between preview and full content
-                            col1, col2 = st.columns(2)
-                            with col1:
-                                if st.button('Show Preview', key=f"preview_{match['source']}"): 
-                                    preview = ' '.join(match['content'].split()[:50]) + "..."
-                                    st.write("**Preview:**")
-                                    st.write(preview)
-                            
-                            with col2:
-                                if st.button('Show Full Content', key=f"full_{match['source']}"):
-                                    st.write("**Full Content:**")
-                                    st.write(match['content'])
-                                    
-                            # Also display chunk metadata if available
-                            if 'metadata' in match:
-                                st.write("**Chunk Metadata:**")
+        if uploaded_file is not None:
+            documents = analyzer.parse_document(uploaded_file, chunk_size=chunk_size)
+            
+            # Search functionality
+            st.subheader("Semantic Search")
+            query = st.text_input("Enter research question or topic:")
+            search_threshold = st.slider("Search Similarity Threshold", 0.0, 1.0, 0.3)
+            
+            if query:
+                with st.spinner("Searching document..."):
+                    matches = analyzer.analyze_query(query, documents, search_threshold)
+                    if matches:
+                        for match in matches:
+                            with st.expander(f"{match['source']} (Similarity: {match['cosine']:.3f})"):
+                                st.write(match['content'])
+                                st.write("**Metadata:**")
                                 st.json(match['metadata'])
-                else:
-                    st.warning("No matches found. Try lowering the threshold.")
-        
-        # Clustering
-        st.subheader("Paper Clustering")
-        n_clusters = st.slider("Number of clusters", 2, 10, 5)
-
-        with st.spinner("Analyzing paper relationships..."):
-            clusters, embeddings, silhouette = analyzer.cluster_papers(documents, n_clusters, validate=True)
-
+                    else:
+                        st.warning("No matches found. Try lowering the threshold.")
             
-            # Display validation metrics
-            if hasattr(analyzer, 'clustering_metrics'):
-                st.subheader("Clustering Validation")
-                
-                # Elbow curve
-                fig_elbow = px.line(
-                    x=analyzer.clustering_metrics['k_range'], 
-                    y=analyzer.clustering_metrics['inertias'],
-                    labels={'x': 'Number of Clusters', 'y': 'Inertia'},
-                    title='Elbow Curve'
-                )
-                st.plotly_chart(fig_elbow)
-                
-                # Silhouette scores
-                fig_silhouette = px.line(
-                    x=analyzer.clustering_metrics['k_range'], 
-                    y=analyzer.clustering_metrics['silhouette_scores'],
-                    labels={'x': 'Number of Clusters', 'y': 'Silhouette Score'},
-                    title='Silhouette Scores by Number of Clusters'
-                )
-                st.plotly_chart(fig_silhouette)
-                
-                # Current clustering silhouette score
-                st.write(f"Current clustering (k={n_clusters}) silhouette score: {silhouette:.3f}")
-
+            # Topic Modeling
+            st.subheader("Topic Analysis")
+            if st.button("Extract Topics", key="extract_topics"):
+                with st.spinner("Analyzing topics..."):
+                    topics, topic_dist = analyzer.extract_topics(documents, n_topics=n_topics)
+                    
+                    # Display topics
+                    for topic in topics:
+                        with st.expander(f"Topic {topic['id'] + 1}"):
+                            for chunk_idx, (chunk, chunk_id, strength) in enumerate(zip(
+                                topic['chunks'], topic['chunk_ids'], topic['strengths'])):
+                                st.write(f"**{chunk_id}** (Strength: {strength:.3f})")
+                                st.write(chunk)
+                                st.write("---")
+                    
+                    # Show topic distribution heatmap
+                    st.write("### Topic Distribution Across Chunks")
+                    topic_df = pd.DataFrame(
+                        topic_dist,
+                        index=[d['source'] for d in documents],
+                        columns=[f"Topic {i+1}" for i in range(n_topics)]
+                    )
+                    fig_topics = px.imshow(
+                        topic_df,
+                        labels=dict(x="Topics", y="Chunks", color="Strength"),
+                        color_continuous_scale="Viridis"
+                    )
+                    st.plotly_chart(fig_topics)
             
-            # Network visualization with clusters
+            # Add visualizations
+            st.subheader("Document Structure Visualizations")
+            
+            # Network visualization
             similarity_threshold = st.slider(
                 "Network Similarity Threshold",
                 min_value=0.0,
                 max_value=1.0,
                 value=0.7,
-                step=0.05
+                step=0.05,
+                key="single_threshold"
             )
             
-            G, similarities, _ = analyzer.create_similarity_network(
-                documents,
-                similarity_threshold
-            )
+            with st.spinner("Creating visualizations..."):
+                # Network visualization
+                G, similarities, _ = analyzer.create_similarity_network(
+                    documents,
+                    similarity_threshold
+                )
+                st.write("### Network Visualization")
+                fig_network = analyzer.visualize_network(G)
+                st.plotly_chart(fig_network)
+                
+                # TSNE and similarity matrices (only if multiple chunks)
+                if len(documents) > 1:
+                    viz_data = analyzer.compare_documents(documents[:len(documents)//2], documents[len(documents)//2:])
+                    fig_scatter, fig_heatmap = analyzer.visualize_comparison(viz_data, 
+                                                                          documents[:len(documents)//2], 
+                                                                          documents[len(documents)//2:])
+                    
+                    st.write("### TSNE Visualization")
+                    st.plotly_chart(fig_scatter)
+                    
+                    st.write("### Similarity Matrices")
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        st.write("Network Similarities")
+                        df_sim = pd.DataFrame(
+                            similarities,
+                            index=[d['source'] for d in documents],
+                            columns=[d['source'] for d in documents]
+                        )
+                        fig_net_heatmap = px.imshow(
+                            df_sim,
+                            labels=dict(x="Chunks", y="Chunks", color="Similarity"),
+                            color_continuous_scale="RdBu"
+                        )
+                        st.plotly_chart(fig_net_heatmap)
+                    
+                    with col2:
+                        st.write("TSNE-based Similarities")
+                        st.plotly_chart(fig_heatmap)
+                else:
+                    st.warning("Need at least 2 chunks for TSNE visualization and similarity matrices")
+                
+    else:  # Document Comparison
+        col1, col2 = st.columns(2)
+        with col1:
+            file1 = st.file_uploader("Upload first document", type=["txt", "md", "csv", "json"], key="doc1")
+        with col2:
+            file2 = st.file_uploader("Upload second document", type=["txt", "md", "csv", "json"], key="doc2")
             
-            st.subheader("Clustered Paper Network")
-            fig = analyzer.visualize_network(G, clusters)
-            st.plotly_chart(fig)
+        if file1 is not None and file2 is not None:
+            doc1_chunks = analyzer.parse_document(file1, chunk_size=chunk_size)
+            doc2_chunks = analyzer.parse_document(file2, chunk_size=chunk_size)
             
-            # Similarity matrix heatmap
-            st.subheader("Paper Similarity Matrix")
-            df_sim = pd.DataFrame(
-                similarities,
-                index=[d['source'] for d in documents],
-                columns=[d['source'] for d in documents]
-            )
-            fig_heatmap = px.imshow(
-                df_sim,
-                labels=dict(x="Paper", y="Paper", color="Similarity"),
-                color_continuous_scale="RdBu"
-            )
-            st.plotly_chart(fig_heatmap)
+            # Topic Modeling for combined documents
+            st.subheader("Combined Topic Analysis")
+            if st.button("Extract Topics", key="extract_topics_combined"):
+                with st.spinner("Analyzing topics..."):
+                    combined_docs = doc1_chunks + doc2_chunks
+                    topics, topic_dist = analyzer.extract_topics(combined_docs, n_topics=n_topics)
+                    
+                    # Display topics
+                    for topic in topics:
+                        with st.expander(f"Topic {topic['id'] + 1}"):
+                            for chunk_idx, (chunk, chunk_id, strength) in enumerate(zip(
+                                topic['chunks'], topic['chunk_ids'], topic['strengths'])):
+                                st.write(f"**{chunk_id}** (Strength: {strength:.3f})")
+                                st.write(chunk)
+                                st.write("---")
+                    
+                    # Show topic distribution heatmap
+                    st.write("### Topic Distribution Across All Chunks")
+                    topic_df = pd.DataFrame(
+                        topic_dist,
+                        index=[d['source'] for d in combined_docs],
+                        columns=[f"Topic {i+1}" for i in range(n_topics)]
+                    )
+                    fig_topics = px.imshow(
+                        topic_df,
+                        labels=dict(x="Topics", y="Chunks", color="Strength"),
+                        color_continuous_scale="Viridis"
+                    )
+                    st.plotly_chart(fig_topics)
             
-            # Show cluster assignments
-            st.subheader("Cluster Assignments")
-            cluster_df = pd.DataFrame({
-            'Document': [d['source'] for d in documents],
-            'Cluster': clusters
-        })
-            st.dataframe(cluster_df)
+            if st.button("Compare Documents", key="compare_btn"):
+                with st.spinner("Analyzing documents..."):
+                    # TSNE visualization
+                    viz_data = analyzer.compare_documents(doc1_chunks, doc2_chunks)
+                    fig_scatter, fig_heatmap = analyzer.visualize_comparison(viz_data, doc1_chunks, doc2_chunks)
+                    
+                    st.write("### TSNE Visualization")
+                    st.plotly_chart(fig_scatter)
+                    
+                    # Network visualization
+                    all_chunks = doc1_chunks + doc2_chunks
+                    similarity_threshold = 0.7
+                    G, similarities, _ = analyzer.create_similarity_network(
+                        all_chunks,
+                        similarity_threshold
+                    )
+                    
+                    st.write("### Network Visualization")
+                    fig_network = analyzer.visualize_network(G)
+                    st.plotly_chart(fig_network)
+                    
+                    # Show both similarity matrices
+                    st.write("### Similarity Matrices")
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        st.write("Cross-document Similarities")
+                        st.plotly_chart(fig_heatmap)
+                    
+                    with col2:
+                        st.write("Network Similarities")
+                        df_sim = pd.DataFrame(
+                            similarities,
+                            index=[d['source'] for d in all_chunks],
+                            columns=[d['source'] for d in all_chunks]
+                        )
+                        fig_net_heatmap = px.imshow(
+                            df_sim,
+                            labels=dict(x="Chunks", y="Chunks", color="Similarity"),
+                            color_continuous_scale="RdBu"
+                        )
+                        st.plotly_chart(fig_net_heatmap)
+                    
+                    # Basic statistics and most similar chunks
+                    st.write("### Document Statistics")
+                    st.write(f"Document 1: {viz_data['metadata']['doc1_chunks']} chunks")
+                    st.write(f"Document 2: {viz_data['metadata']['doc2_chunks']} chunks")
+                    
+                    similarities = viz_data['cross_similarities']
+                    max_sim_idx = np.unravel_index(np.argmax(similarities), similarities.shape)
+                    
+                    st.write("### Most Similar Chunks")
+                    with st.expander("View chunk contents"):
+                        col1, col2 = st.columns(2)
+                        with col1:
+                            st.write("Document 1 Chunk:")
+                            st.write(doc1_chunks[max_sim_idx[0]]['content'])
+                        with col2:
+                            st.write("Document 2 Chunk:")
+                            st.write(doc2_chunks[max_sim_idx[1]]['content'])
 
 if __name__ == "__main__":
     main()
