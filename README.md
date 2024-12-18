@@ -69,7 +69,13 @@ Explore document clusters and relationships
 View similarity metrics between document sections
 
 # Note
-Ensure Ollama is running locally (default: http://localhost:11434) before starting the application.
+To confirm the model is installed correctly, run the following in the command line. You should see a large amount of embeddings returned.
+   ```bash
+curl http://localhost:11434/api/embeddings -d '{
+  "model": "nomic-embed-text",
+  "prompt": "test"
+}'
+  ```
 
 
 
