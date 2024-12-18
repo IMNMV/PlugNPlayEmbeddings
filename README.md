@@ -1,68 +1,11 @@
 # PlugNPlayEmbeddings
 
-Text Analysis with Embeddings - This application provides semantic search and clustering analysis for text documents using Nomic embeddings and Ollama.
-
-## Prerequisites
-* Python 3.9+
-* Ollama installed (https://ollama.com)
-* Nomic-embed-text model pulled in Ollama: https://ollama.com/library/nomic-embed-text
-
-## Setup Instructions
-
-1. Install Ollama:
-   * Visit https://ollama.com
-   * Follow installation instructions for your OS
-
-2. Pull the Nomic embeddings model using the command line interface:
-   ```bash
-   ollama pull nomic-embed-text
-
-   # Confirm it worked correctly - should see a lot of numbers (embeddings) populate 
-   curl http://localhost:11434/api/embeddings -d '{
-    "model": "nomic-embed-text",
-    "prompt": "test"
-    }'
-   ```
-  
-
-3. Create and activate virtual environment:
-   
-    For macOS/Linux:
-      ```bash
-      # Create virtual environment
-      python -m venv plugnplay_env
-         
-      # Activate virtual environment
-      source plugnplay_env/bin/activate
-      ```
-     
-    For Windows:
-      ```bash
-      # Create virtual environment
-      python -m venv plugnplay_env
-        
-      # Activate virtual environment
-      .\plugnplay_env\Scripts\activate
-      ```
-
-4. Install Dependencies and run:
-   ```bash
-   # Install requirements
-   pip install -r requirements.txt
-
-   # Run the application
-   streamlit run app.py
-   ```
-
-5. Deactivate when done
-   ```bash
-   deactivate
-   ```
 
 
 # Simple Text Analysis Tool 🔍
 
-This tool helps you understand and compare text documents in a super simple way. Think of it like having a smart friend who reads your documents and tells you what they're about!
+This tool helps you understand and compare text documents in a super simple way. Think of it like having a smart friend who reads your documents and tells you what they're about! This application utilizes semantic search and clustering analysis for text documents using Nomic embeddings and Ollama.
+
 
 ## Features 🌟
 
@@ -134,5 +77,65 @@ This tool helps you understand and compare text documents in a super simple way.
 - **Number of Topics**: How many main themes to look for
 - **Search Threshold**: How picky you want the search to be
 - **Network Threshold**: How strong connections need to be to show up in the network view
+
+## Prerequisites
+* Python 3.9+
+* Ollama installed (https://ollama.com)
+* Nomic-embed-text model pulled in Ollama: https://ollama.com/library/nomic-embed-text
+
+## Setup Instructions
+
+1. Install Ollama:
+   * Visit https://ollama.com
+   * Follow installation instructions for your OS
+
+2. Pull the Nomic embeddings model using the command line interface:
+   ```bash
+   ollama pull nomic-embed-text
+
+   # Confirm it worked correctly - should see a lot of numbers (embeddings) populate 
+   curl http://localhost:11434/api/embeddings -d '{
+    "model": "nomic-embed-text",
+    "prompt": "test"
+    }'
+   ```
+  
+
+3. Create and activate virtual environment:
+   
+    For macOS/Linux:
+      ```bash
+      # Create virtual environment
+      python -m venv plugnplay_env
+         
+      # Activate virtual environment
+      source plugnplay_env/bin/activate
+      ```
+     
+    For Windows:
+      ```bash
+      # Create virtual environment
+      python -m venv plugnplay_env
+        
+      # Activate virtual environment
+      .\plugnplay_env\Scripts\activate
+      ```
+
+4. Install Dependencies and run:
+   ```bash
+   # Install requirements
+   pip install -r requirements.txt
+
+   # Run the application
+   streamlit run app.py
+   ```
+
+5. Deactivate when done
+   ```bash
+   deactivate
+   ```
+
+
+
 
 That's it! Now you can explore your documents like a pro! 🎉
