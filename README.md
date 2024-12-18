@@ -30,13 +30,13 @@ For macOS/Linux:
    ```
    
   For Windows:
-     ```bash
-     # Create virtual environment
-     python -m venv plugnplay_env
+  ```bash
+  # Create virtual environment
+  python -m venv plugnplay_env
   
-     # Activate virtual environment
-     .\plugnplay_env\Scripts\activate
-    ```
+  # Activate virtual environment
+  .\plugnplay_env\Scripts\activate
+  ```
 
 4. Install Dependencies and run:
    ```bash
