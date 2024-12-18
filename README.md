@@ -16,7 +16,14 @@ Text Analysis with Embeddings - This application provides semantic search and cl
 2. Pull the Nomic embeddings model using the command line interface:
    ```bash
    ollama pull nomic-embed-text:latest
+
+   # Confirm it worked correctly
+   curl http://localhost:11434/api/embeddings -d '{
+  "model": "nomic-embed-text",
+  "prompt": "test"
+}'
    ```
+  
 
 3. Create and activate virtual environment:
    
@@ -67,15 +74,6 @@ Upload a text document (.txt, .md, .csv, or .json)
 Use the semantic search to find relevant sections
 Explore document clusters and relationships
 View similarity metrics between document sections
-
-# Note
-To confirm the model is installed correctly, run the following in the command line. You should see a large amount of embeddings returned.
-   ```bash
-curl http://localhost:11434/api/embeddings -d '{
-  "model": "nomic-embed-text",
-  "prompt": "test"
-}'
-  ```
 
 
 
