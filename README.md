@@ -16,6 +16,7 @@ Text Analysis with Embeddings - This application provides semantic search and cl
 2. Pull the Nomic embeddings model using the command line interface:
    ```bash
    ollama pull nomic-embed-text:latest
+   ```
 
 3. Create and activate virtual environment:
 For macOS/Linux:
@@ -25,6 +26,9 @@ For macOS/Linux:
    
    # Activate virtual environment
    source plugnplay_env/bin/activate
+   ```
+   
+  
 
 For Windows:
    ```bash
@@ -33,6 +37,7 @@ For Windows:
 
    # Activate virtual environment
    .\plugnplay_env\Scripts\activate
+  ```
 
 
 4. Install Dependencies and run:
@@ -42,10 +47,12 @@ For Windows:
 
    # Run the application
    streamlit run app.py
+   ```
 
 5. Deactivate when done
    ```bash
    deactivate
+   ```
 
 
 # Features
