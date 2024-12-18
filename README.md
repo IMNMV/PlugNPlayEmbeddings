@@ -17,7 +17,7 @@ Text Analysis with Embeddings - This application provides semantic search and cl
    ```bash
    ollama pull nomic-embed-text
 
-   # Confirm it worked correctly
+   # Confirm it worked correctly - should see a lot of numbers (embeddings) populate 
    curl http://localhost:11434/api/embeddings -d '{
     "model": "nomic-embed-text",
     "prompt": "test"
