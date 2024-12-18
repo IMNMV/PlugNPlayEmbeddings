@@ -75,5 +75,46 @@ Use the semantic search to find relevant sections
 Explore document clusters and relationships
 View similarity metrics between document sections
 
+# Interpretation
 
+1. **Document Chunking**
+- Your text gets split into chunks of ~4,000 words
+- Each chunk overlaps by 10% with the next chunk to maintain context
+- You'll see chunks labeled as "yourfile_chunk_1", "yourfile_chunk_2", etc.
+- Each chunk shows metadata about its position in the original text
+
+2. **Semantic Search**
+- Type your query in the search box
+- Adjust the similarity threshold slider (higher = stricter matching)
+- Results show:
+  * Similarity score (0-1, higher means better match)
+  * Preview or full content options
+  * Which chunk it came from
+
+3. **Clustering Validation**
+- Elbow Curve: Look for the "bend" - it suggests optimal number of clusters
+- Silhouette Score: Ranges from -1 to 1
+  * Closer to 1 = better defined clusters
+  * Closer to 0 = overlapping clusters
+  * Below 0 = likely too many clusters
+
+4. **Network Visualization**
+- Each dot = a chunk of your text
+- Lines between dots = similar content
+- Colors = cluster assignments
+- Thicker lines = stronger similarities
+- Adjust similarity threshold to see different connection strengths
+
+5. **Similarity Matrix**
+- Shows how every chunk relates to every other chunk
+- Darker colors = more similar
+- Diagonal is always darkest (chunk compared to itself)
+- Look for dark blocks to find groups of related content
+
+6. **Cluster Assignments Table**
+- Lists which chunk belongs to which cluster
+- Use this to cross-reference with network visualization
+- Helps track how your document was grouped
+
+Remember: Higher similarity scores (>0.7) indicate strong relationships, while lower scores (<0.3) suggest weak or coincidental similarities.
 
