@@ -15,7 +15,7 @@ Text Analysis with Embeddings - This application provides semantic search and cl
 
 2. Pull the Nomic embeddings model using the command line interface:
    ```bash
-   ollama pull nomic-embed-text:latest
+   ollama pull nomic-embed-text
 
    # Confirm it worked correctly
    curl http://localhost:11434/api/embeddings -d '{
