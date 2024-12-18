@@ -20,23 +20,23 @@ Text Analysis with Embeddings - This application provides semantic search and cl
 
 3. Create and activate virtual environment:
    
-For macOS/Linux:
-  ```bash
-  # Create virtual environment
-  python -m venv plugnplay_env
+    For macOS/Linux:
+      ```bash
+      # Create virtual environment
+      python -m venv plugnplay_env
+         
+      # Activate virtual environment
+      source plugnplay_env/bin/activate
+      ```
      
-  # Activate virtual environment
-  source plugnplay_env/bin/activate
-  ```
-     
-For Windows:
-  ```bash
-  # Create virtual environment
-  python -m venv plugnplay_env
-    
-  # Activate virtual environment
-  .\plugnplay_env\Scripts\activate
-  ```
+    For Windows:
+      ```bash
+      # Create virtual environment
+      python -m venv plugnplay_env
+        
+      # Activate virtual environment
+      .\plugnplay_env\Scripts\activate
+      ```
 
 4. Install Dependencies and run:
    ```bash
